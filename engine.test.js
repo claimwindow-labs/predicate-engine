@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {intervals,eligible,analyzeClaimants} from './index.js';
+const before=n=>({abs_before:String(n)});
+test('strict boundary and complement',()=>{assert.equal(eligible(before(10),9),true);assert.equal(eligible(before(10),10),false);assert.equal(eligible({not:before(10)},10),true)});
+test('bounded window',()=>assert.deepEqual(intervals({and:[{not:before(5)},before(10)]}),[{start:'5',end:'10'}]));
+test('disjoint union retains gap',()=>assert.deepEqual(intervals({or:[before(5),{not:before(10)}]}),[{start:'0',end:'5'},{start:'10',end:null}]));
+test('contradiction empty',()=>assert.deepEqual(intervals({and:[before(5),{not:before(5)}]}),[]));
+test('relative creation time is explicit',()=>{assert.throws(()=>intervals({rel_before:'10'}),/creation/);assert.deepEqual(intervals({rel_before:'10'},{createdAt:'100'}),[{start:'0',end:'110'}])});
+test('large values remain exact',()=>assert.equal(eligible(before('9007199254740993'),'9007199254740992'),true));
+test('reject malformed and unsafe values',()=>{for(const p of [{unknown:1},{and:[]},{unconditional:false},{abs_before:-1},{abs_before:9007199254740992},{not:{},abs_before:1}])assert.throws(()=>intervals(p))});
+test('claimant fallback covers all time',()=>assert.deepEqual(analyzeClaimants([{destination:'recipient',predicate:before(10)},{destination:'sender',predicate:{not:before(10)}}]).unclaimable,[]));
+test('detect permanent lockout',()=>assert.deepEqual(analyzeClaimants([{destination:'recipient',predicate:before(10)}]).unclaimable,[{start:'10',end:null}]));
+test('ISO input uses exact seconds',()=>assert.deepEqual(intervals({abs_before:'1970-01-01T00:00:10Z'}),[{start:'0',end:'10'}]));
+test('exhaustive two-boundary boolean equivalence',()=>{for(let a=0;a<10;a++)for(let b=0;b<10;b++)for(let t=0;t<12;t++){assert.equal(eligible({and:[before(a),{not:before(b)}]},t),t<a&&t>=b);assert.equal(eligible({or:[before(a),{not:before(b)}]},t),t<a||t>=b)}});
